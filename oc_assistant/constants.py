@@ -18,4 +18,5 @@ WEEKDAYS = [
     "Saturday",
     "Sunday",
 ]
+
 SHORT_WEEKDAYS = [d.lower()[:3] for d in WEEKDAYS]

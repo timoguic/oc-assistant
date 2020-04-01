@@ -6,10 +6,11 @@ import click
 import json
 
 from datetime import datetime, timedelta
-from dateutil.tz import tzlocal
+from dateutil.tz import tzlocal, tzutc
 from dateutil.parser import isoparse
 
 from oc_assistant.constants import *
+from oc_assistant.utils import CustomUtils as utils
 
 
 class OcConnector:
@@ -29,24 +30,6 @@ class OcConnector:
         """ Updates the requests headers when setting the access token """
         self._access_token = val
         self.session.headers.update({"Authorization": "Bearer {}".format(val)})
-
-    @staticmethod
-    def _weekday_from_fuzzy(value):
-        if not isinstance(value, str):
-            value = str(value)
-
-        if value.isdigit():
-            value = int(value)
-            if 0 <= value <= 6:
-                return value
-            else:
-                raise ValueError("Invalid day: " + value)
-
-        if value.title() in WEEKDAYS:
-            return WEEKDAYS.index(value.title())
-
-        if value.lower() in SHORT_WEEKDAYS:
-            return SHORT_WEEKDAYS.index(value.lower())
 
     def _authenticate_from_file(self):
         try:
@@ -98,6 +81,7 @@ class OcConnector:
 
         # Post data
         self.session.post(TOKEN_URL, data=data)
+        print(self.session.cookies.get_dict())
 
         # We did not find the `access_token` cookie. :sad:
         if not "access_token" in self.session.cookies.get_dict():
@@ -159,8 +143,35 @@ class OcConnector:
 
         return data
 
-    def set_available(self, day, start_time, end_time):
-        day = datetime.date(day)
+    def _book_slot(self, day, start_time):
+        hour = start_time
+        date_start = datetime(
+            day.year, day.month, day.day, hour, 0, tzinfo=tzlocal()
+        )
+
+        # The last hour of the day will get us to day:24:00 - change to day+1:00:00
+        # Python idiosyncrasies with ISO8601
+        if hour == 23:
+            day = day + timedelta(days=1)
+            hour = -1
+
+        date_end = datetime(
+            day.year, day.month, day.day, hour + 1, 0, tzinfo=tzlocal()
+        )
+
+        data = {
+            "startDate": date_start.astimezone(tzutc()).isoformat(),
+            "endDate": date_end.astimezone(tzutc()).isoformat(),
+        }
+
+        r = self.session.post(API_USER_AVAIL.format(self.user_id), json=data)
+        if r.status_code in (200, 201, 204):
+            return True
+
+        return False
+
+    @staticmethod
+    def _validate_start_end(start_time, end_time):
         if start_time > end_time:
             raise ValueError("Start time must be before end time.")
         if start_time < 0 or end_time < 0:
@@ -168,72 +179,59 @@ class OcConnector:
         if start_time > 24 or end_time > 24:
             raise ValueError("Start / end time cannot be > 24.")
 
-        click.echo(
-            f"+++ Adding availability for {datetime.strftime(day, '%d-%m-%Y')}... ",
-            nl=False,
-        )
+    def book_series(self, day_of_week, start_time, end_time, nb_weeks):
+        self._validate_start_end(start_time, end_time)
 
-        # Loop through the range
-        for hour in range(start_time, end_time):
-            date_start = datetime(
-                day.year, day.month, day.day, hour, 0, tzinfo=tzlocal()
-            )
-            # The last hour of the day will get us to day:24:00 - change to day+1:00:00
-            # Python idiosyncrasies with ISO8601
-            if hour == 23:
-                day = day + timedelta(days=1)
-                hour = -1
-            date_end = datetime(
-                day.year, day.month, day.day, hour + 1, 0, tzinfo=tzlocal()
+        # Book slots
+        for next_day in utils.get_next_weekday_from_int(day_of_week, nb_weeks):
+            click.echo(
+                f"+++ Adding availability for {datetime.strftime(next_day, '%d-%m-%Y')}... ",
+                nl=False,
             )
 
-            # FIXME: ugly UTC timezoning
-            data = {
-                "startDate": date_start.astimezone(tzutc()).isoformat(),
-                "endDate": date_end.astimezone(tzutc()).isoformat(),
-            }
+            day = datetime.date(next_day)
+            # Loop through the range
+            for hour in range(start_time, end_time):
+                if self._book_slot(day, hour):
+                    click.echo(f"{hour}:00 ", nl=False)
+                else:
+                    click.echo("! ", nl=False)
 
-            r = self.session.post(API_USER_AVAIL.format(self.user_id), json=data)
-            if r.status_code in (200, 201, 204):
-                click.echo(f"{hour}:00", nl=False)
-                click.echo(" ", nl=False)
+            click.echo("OK!")
+    
+    def release_series(self, day, start_time, end_time, nb_weeks):
+        self._validate_start_end(start_time, end_time)
 
-        click.echo("OK!")
+        days = [d for d in utils.get_next_weekday_from_int(day, nb_weeks)]
+        days = list(map(datetime.date, days))
 
-    def set_free(self, day, start_time, end_time):
-        day = datetime.date(day)
         availabilities = self.session.get(API_USER_AVAIL.format(self.user_id)).json()
+
         for avail in availabilities:
+            # This does not seem like something we want
             if not "availabilityId" in avail:
                 continue
 
-            avail_id = avail["availabilityId"]
-
+            # Get local time
             avail_dt = isoparse(avail["startDate"]).astimezone(tzlocal())
+
+            # Get date
             avail_date = datetime.date(avail_dt)
-            if avail_date == day and start_time <= avail_dt.hour <= end_time - 1:
-                delete_url = API_BASE_URL + "/availabilities/" + str(avail_id)
+
+            # Slot is in the range -> delete
+            if avail_date in days and start_time <= avail_dt.hour <= end_time - 1:
+                # Get ID
+                avail_id = avail["availabilityId"]
+
+                delete_url = f"{API_BASE_URL}/availabilities/{avail_id}"
                 r = self.session.delete(delete_url)
+
                 if r.status_code in (200, 201, 204):
-                    click.echo(avail_dt.hour, nl=False)
-                    click.echo(" ", nl=False)
+                    click.echo(f"{avail_dt:%d-%m-%Y@%H:%M} ", nl=False)
                 else:
-                    click.echo("!", nl=False)
+                    click.echo("! ", nl=False)
 
         click.echo("OK!")
 
-    def set_recur_day(self, day, start_time, end_time, nb_weeks):
-        day = int(day)
-        today = datetime.today()
-        next_day = today + timedelta(days=(day - today.weekday() + 7) % 7)
-        for _ in range(nb_weeks):
-            self.set_available(next_day, start_time, end_time)
-            next_day = next_day + timedelta(days=7)
 
-    def remove_recur_day(self, day, start_time, end_time, nb_weeks):
-        day = int(day)
-        today = datetime.today()
-        next_day = today + timedelta(days=(day - today.weekday() + 7) % 7)
-        for _ in range(nb_weeks):
-            self.set_free(next_day, start_time, end_time)
-            next_day = next_day + timedelta(days=7)
+    
