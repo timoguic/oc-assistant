@@ -2,31 +2,20 @@
 OC Assistant
 ============
 
-
-.. image:: https://img.shields.io/pypi/v/oc_assistant.svg
-        :target: https://pypi.python.org/pypi/oc_assistant
-
-.. image:: https://img.shields.io/travis/timoguic/oc_assistant.svg
-        :target: https://travis-ci.com/timoguic/oc_assistant
-
-.. image:: https://readthedocs.org/projects/oc-assistant/badge/?version=latest
-        :target: https://oc-assistant.readthedocs.io/en/latest/?badge=latest
-        :alt: Documentation Status
-
-
-
-
 Python package to facilitate interaction with OC website.
 
-
+* Requires Python3 and Pip
 * Free software: GNU General Public License v3
-* Documentation: https://oc-assistant.readthedocs.io.
 
 
 Features
 --------
 
-* TODO
+* `pip install --user oc-assistant`
+* `oc_assistant add fri 10 16 4`: adds availabilities on Fridays from 10:00 to 16:00, recurring for 4 weeks
+* `oc_assistant add Monday 10 24 8`: adds availabilities on Mondays from 10:00 to midnight, recurring for 8 weeks
+* `oc_assistant add 3 10 16`: adds availabilities next Wednesday (= day #3) from 10:00 to 16:00
+* `oc_assistant rem fri 10 18 8`: removes any availabilities on Fridays from 10:00 to 18:00 for the next 8 weeks
 
 Credits
 -------

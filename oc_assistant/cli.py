@@ -82,6 +82,19 @@ def rem(day_of_week, start_hour, end_hour, nb_weeks):
 def check():
     # Connector
     username, password = utils.get_username_password()
+    if not (username and password):
+        from getpass import getpass
+
+        click.secho("!!! No username / password found.", fg="red")
+        username = input("Enter your OC username:")
+        password = getpass("Enter your OC password (display hidden):")
+
+        with open("oc-credentials.txt", "w") as fp:
+            fp.write(f"{username}\n{password}")
+
+        click.secho("~~~ Ok. Please run the program again.")
+        sys.exit(0)
+        
     connector = OcConnector(username, password)
 
     if connector.authenticated:

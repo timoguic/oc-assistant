@@ -81,7 +81,6 @@ class OcConnector:
 
         # Post data
         self.session.post(TOKEN_URL, data=data)
-        print(self.session.cookies.get_dict())
 
         # We did not find the `access_token` cookie. :sad:
         if not "access_token" in self.session.cookies.get_dict():
@@ -114,7 +113,7 @@ class OcConnector:
             }
             with open("bearer-token.json", "w") as fp:
                 json.dump(data, fp)
-                print(">>> Saved token.")
+                click.echo("~~~ Saved token.")
         
         return True
 

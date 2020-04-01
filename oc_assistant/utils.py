@@ -61,3 +61,4 @@ class CustomUtils:
             yield next_day
             next_day = next_day + timedelta(days=7)
             current = current + 1
+            
