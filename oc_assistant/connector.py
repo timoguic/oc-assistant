@@ -19,6 +19,7 @@ class OcConnector:
         self._access_token = None
         self.save_token = save_token
         self.session = requests.Session()
+        self.session.headers.update({"User-Agent": "Google Chrome"})
         self.authenticated = self._authenticate(username, password, force_auth)
 
     @property
@@ -63,7 +64,8 @@ class OcConnector:
 
         # CSRF token
         click.echo("+++ Fetching CSRF token... ", nl=False)
-        data = self.session.get(CSRF_URL).json()
+        data = self.session.get(CSRF_URL)
+        data = data.json()
         csrf = data["csrf"]
         click.echo("OK!")
 
@@ -117,6 +119,10 @@ class OcConnector:
         
         return True
 
+    def get_avail(self):
+        api_data = self.session.get(API_USER_AVAIL.format(self.user_id)).json()
+        return api_data
+        
     def get_events(self):
         """
         Requests the API to get calendar events with attendees.

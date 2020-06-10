@@ -21,21 +21,26 @@ def main():
 
 def do_add_rem(day_of_week, start_hour, end_hour, nb_weeks, callback_attr, message):
     # Validate arguments
-    day_of_week = utils.get_weekday_from_fuzzy_str(day_of_week)
+    if day_of_week == "all":
+        day_of_week = range(len(WEEKDAYS))
+    else:
+        day_of_week = list(utils.get_weekday_from_fuzzy_str(day_of_week))
+
     start_hour, end_hour, nb_weeks = utils.check_int_values(start_hour, end_hour, nb_weeks)
 
     # Connector
     username, password = utils.get_username_password()
     connector = OcConnector(username, password)
 
-    click.echo(
-        f"+++ {message} {nb_weeks} week{('', 's')[nb_weeks>1]} of availabilities: ",
-        nl=False,
-    )
-    click.echo(f"every {WEEKDAYS[day_of_week]}, {start_hour}:00-{end_hour}:00.")
+    for d in day_of_week:
+        click.echo(
+            f"+++ {message} {nb_weeks} week{('', 's')[nb_weeks>1]} of availabilities: ",
+            nl=False,
+        )
+        click.echo(f"every {WEEKDAYS[d]}, {start_hour}:00-{end_hour}:00.")
 
-    callback = getattr(connector, callback_attr)
-    callback(day_of_week, start_hour, end_hour, nb_weeks)
+        callback = getattr(connector, callback_attr)
+        callback(d, start_hour, end_hour, nb_weeks)
 
 
 @main.command()
@@ -77,6 +82,26 @@ def rem(day_of_week, start_hour, end_hour, nb_weeks):
     """
     
     do_add_rem(day_of_week, start_hour, end_hour, nb_weeks, callback_attr="release_series", message="Removing")
+
+@main.command()
+def view():
+    # Connector
+    username, password = utils.get_username_password()
+    connector = OcConnector(username, password)
+
+    events = connector.get_events()
+    for e in events:
+        click.echo(str(e))
+
+@main.command()
+def whatever():
+    # Connector
+    username, password = utils.get_username_password()
+    connector = OcConnector(username, password)
+
+    avail = connector.get_avail()
+    for e in avail:
+        click.echo(str(e))
 
 @main.command()
 def check():
